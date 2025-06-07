@@ -16,24 +16,30 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    val studentList = mutableListOf(
-        SinhVien("Nguyễn Văn A", "SV001", "0123456789", "a@gmail.com"),
-        SinhVien("Trần Thị B", "SV002", "0987654321", "b@gmail.com"),
-        SinhVien("Lê Văn C", "SV003", "0111222333", "c@gmail.com")
-    )
+    val studentList = mutableListOf<SinhVien>()
 
     private lateinit var listView: ListView
     private lateinit var adapter: SinhVienAdapter
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        val svDao = DatabaseSinhVien.getInstance(application).sinhVienDao()
         listView = findViewById(R.id.studentList)
 
         adapter = SinhVienAdapter(this,studentList)
         listView.adapter = adapter
+        lifecycleScope.launch(Dispatchers.IO) {
+            val tmpList = svDao.getAllSinhVien()
+            for(i in tmpList){
+                studentList.add(i)
+            }
+        }
 
         listView.setOnItemClickListener { parent, view, position, id ->
             // Tạo PopupMenu với view của item làm view neo
@@ -51,8 +57,12 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     R.id.delete -> {
+                        val sv = studentList[position]
                         studentList.removeAt(position)
                         adapter.notifyDataSetChanged()
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            svDao.delSinhVien(sv)
+                        }
                         Toast.makeText(this, "Xoa thanh cong", Toast.LENGTH_SHORT).show()
                         true
                     }
@@ -87,6 +97,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        val svDao = DatabaseSinhVien.getInstance(application).sinhVienDao()
         return when (item.itemId) {
             R.id.add_sv -> {
                 // Tạo AlertDialog
@@ -103,7 +114,6 @@ class MainActivity : AppCompatActivity() {
                 val phonenumberEdt = dialogView.findViewById<EditText>(R.id.phonenumber)
                 val emailEdt = dialogView.findViewById<EditText>(R.id.email)
 
-
                 // Cấu hình dialog
                 dialogBuilder.setTitle("Thêm sinh viên")
                     .setPositiveButton("Add") { dialog, which ->
@@ -112,7 +122,11 @@ class MainActivity : AppCompatActivity() {
                         val mssv = mssvEdt.text.toString()
                         val phoneNumber = phonenumberEdt.text.toString()
                         val email = emailEdt.text.toString()
-                        studentList.add(SinhVien(name,mssv,phoneNumber,email))
+                        val sv = SinhVien(name,mssv,phoneNumber,email)
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            svDao.addSinhVien(sv)
+                        }
+                        studentList.add(sv)
                         adapter.notifyDataSetChanged()
                         Toast.makeText(this, "Them sinh vien thanh cong!", Toast.LENGTH_SHORT).show()
                     }
@@ -130,6 +144,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showUpdateDialog(position: Int) {
+        val svDao = DatabaseSinhVien.getInstance(application).sinhVienDao()
         val dialogBuilder = AlertDialog.Builder(this)
         val inflater = layoutInflater
         val dialogView = inflater.inflate(R.layout.dialog_add_sv, null)
@@ -176,6 +191,9 @@ class MainActivity : AppCompatActivity() {
                 // Cập nhật sinh viên
                 studentList[position] = SinhVien(name, mssv, phoneNumber, email)
                 adapter.notifyDataSetChanged()
+                lifecycleScope.launch(Dispatchers.IO) {
+                    svDao.updateSinhVien(studentList[position])
+                }
                 Toast.makeText(this, "Cập nhật thành công!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy") { dialog, which -> dialog.dismiss() }
